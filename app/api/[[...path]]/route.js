@@ -121,11 +121,19 @@ export async function POST(request, { params }) {
   try {
     const pathSegments = params?.path || []
     const endpoint = pathSegments[0]
-    const body = await request.json()
-
+    
     // Handle authentication
     if (endpoint === 'auth') {
       const action = pathSegments[1]
+      
+      // Logout doesn't need a body
+      if (action === 'logout') {
+        const result = mockAuth.logout()
+        return NextResponse.json(result)
+      }
+      
+      // Other auth actions need body
+      const body = await request.json()
       
       if (action === 'login') {
         const result = mockAuth.login(body.email, body.password)
