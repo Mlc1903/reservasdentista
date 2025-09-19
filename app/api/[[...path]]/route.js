@@ -148,12 +148,10 @@ export async function POST(request, { params }) {
         const result = mockAuth.register(body.email, body.password, body.name)
         return NextResponse.json(result)
       }
-      
-      if (action === 'logout') {
-        const result = mockAuth.logout()
-        return NextResponse.json(result)
-      }
     }
+
+    // For non-auth endpoints, parse body
+    const body = await request.json()
 
     // Handle data creation
     if (isSupabaseConfigured()) {
