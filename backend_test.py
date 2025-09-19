@@ -10,7 +10,7 @@ import sys
 from datetime import datetime, timedelta
 
 # Base URL from environment
-BASE_URL = "https://smileadmin.preview.emergentagent.com/api"
+BASE_URL = "http://localhost:3000/api"
 
 class DentalClinicAPITester:
     def __init__(self):
