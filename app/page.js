@@ -1,5 +1,8 @@
 'use client'
-
+import FullCalendar from "@fullcalendar/react"
+import dayGridPlugin from "@fullcalendar/daygrid"
+import timeGridPlugin from "@fullcalendar/timegrid"
+import interactionPlugin from "@fullcalendar/interaction"
 import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -50,7 +53,8 @@ export default function App() {
   const [patients, setPatients] = useState([])
   const [treatments, setTreatments] = useState([])
   const [appointments, setAppointments] = useState([])
-  
+  const [calendarEvents, setCalendarEvents] = useState([])
+
   // Form states
   const [selectedItem, setSelectedItem] = useState(null)
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -135,6 +139,16 @@ export default function App() {
       setPatients(await patientsRes.json())
       setTreatments(await treatmentsRes.json())
       setAppointments(await appointmentsRes.json())
+      setCalendarEvents(
+      appointments.map((a) => ({
+        id: a.id,
+        title: `${a.treatments?.name} - ${a.patients?.fullName}`,
+        start: `${a.appointmentDate}T${a.appointmentTime}`,
+        backgroundColor: "#3B82F6",
+        borderColor: "#2563EB",
+      }))
+      )
+
     } catch (error) {
       toast.error('Failed to load data')
     }
@@ -287,108 +301,97 @@ export default function App() {
   ]
 
   // Dashboard component
-  const DashboardContent = () => (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold text-gray-900">Dashboard Overview</h1>
-      </div>
-      
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Card className="border-l-4 border-l-blue-500">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">Total Dentists</CardTitle>
-            <UserCheck className="h-4 w-4 text-blue-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-gray-900">{dentists.length}</div>
-          </CardContent>
-        </Card>
-        
-        <Card className="border-l-4 border-l-green-500">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">Total Patients</CardTitle>
-            <Users className="h-4 w-4 text-green-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-gray-900">{patients.length}</div>
-          </CardContent>
-        </Card>
-        
-        <Card className="border-l-4 border-l-purple-500">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">Treatments Available</CardTitle>
-            <FileText className="h-4 w-4 text-purple-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-gray-900">{treatments.length}</div>
-          </CardContent>
-        </Card>
-        
-        <Card className="border-l-4 border-l-orange-500">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">Scheduled Appointments</CardTitle>
-            <CalendarIcon className="h-4 w-4 text-orange-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-gray-900">{appointments.length}</div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <CalendarIcon className="h-5 w-5" />
-              Recent Appointments
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {appointments.slice(0, 5).map((appointment) => (
-                <div key={appointment.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                  <div>
-                    <p className="font-medium text-gray-900">{appointment.patients?.fullName}</p>
-                    <p className="text-sm text-gray-600">{appointment.treatments?.name}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm font-medium text-gray-900">{appointment.appointmentDate}</p>
-                    <p className="text-sm text-gray-600">{appointment.appointmentTime}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <UserCheck className="h-5 w-5" />
-              Available Dentists
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {dentists.slice(0, 5).map((dentist) => (
-                <div key={dentist.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                  <Avatar>
-                    <AvatarFallback className="bg-blue-100 text-blue-600">
-                      {dentist.fullName.split(' ').map(n => n[0]).join('')}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <p className="font-medium text-gray-900">{dentist.fullName}</p>
-                    <p className="text-sm text-gray-600">{dentist.specialty}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+ const DashboardContent = () => (
+  <div className="space-y-6">
+    <div className="flex items-center justify-between">
+      <h1 className="text-3xl font-bold text-gray-900">Dashboard Overview</h1>
     </div>
-  )
+    
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      {/* ... tus 4 cards de resumen (Total Dentists, Total Patients, etc.) ... */}
+    </div>
+
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* Recent Appointments */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <CalendarIcon className="h-5 w-5" />
+            Recent Appointments
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3">
+            {appointments.slice(0, 5).map((appointment) => (
+              <div key={appointment.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                <div>
+                  <p className="font-medium text-gray-900">{appointment.patients?.fullName}</p>
+                  <p className="text-sm text-gray-600">{appointment.treatments?.name}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm font-medium text-gray-900">{appointment.appointmentDate}</p>
+                  <p className="text-sm text-gray-600">{appointment.appointmentTime}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Available Dentists */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <UserCheck className="h-5 w-5" />
+            Available Dentists
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3">
+            {dentists.slice(0, 5).map((dentist) => (
+              <div key={dentist.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                <Avatar>
+                  <AvatarFallback className="bg-blue-100 text-blue-600">
+                    {dentist.fullName.split(' ').map(n => n[0]).join('')}
+                  </AvatarFallback>
+                </Avatar>
+                <div>
+                  <p className="font-medium text-gray-900">{dentist.fullName}</p>
+                  <p className="text-sm text-gray-600">{dentist.specialty}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+
+    {/* <-- Aquí agregamos el calendario --> */}
+    <div className="mt-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>
+            <CalendarIcon className="h-5 w-5 mr-2 inline-block" />
+            Appointments Calendar
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <FullCalendar
+            plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
+            initialView="dayGridMonth"
+            events={calendarEvents}  // <-- tus eventos de citas
+            headerToolbar={{
+              left: 'prev,next today',
+              center: 'title',
+              right: 'dayGridMonth,timeGridWeek,timeGridDay',
+            }}
+            height="auto"
+          />
+        </CardContent>
+      </Card>
+    </div>
+  </div>
+);
 
   // Data table components
   const renderDataTable = (section) => {

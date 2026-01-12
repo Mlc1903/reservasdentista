@@ -158,7 +158,7 @@ export async function POST(request, { params }) {
       switch (endpoint) {
         case 'dentists':
           const dentistData = {
-            id: `dentist_${Date.now()}`,
+            
             ...body,
             createdAt: new Date().toISOString()
           }
@@ -174,7 +174,7 @@ export async function POST(request, { params }) {
 
         case 'patients':
           const patientData = {
-            id: `patient_${Date.now()}`,
+            
             ...body,
             createdAt: new Date().toISOString()
           }
@@ -190,7 +190,7 @@ export async function POST(request, { params }) {
 
         case 'treatments':
           const treatmentData = {
-            id: `treatment_${Date.now()}`,
+            
             ...body,
             createdAt: new Date().toISOString()
           }
@@ -206,7 +206,6 @@ export async function POST(request, { params }) {
 
         case 'appointments':
           const appointmentData = {
-            id: `appt_${Date.now()}`,
             ...body,
             status: 'scheduled',
             createdAt: new Date().toISOString()
