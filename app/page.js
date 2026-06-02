@@ -15,6 +15,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Calendar, dateFns } from '@/components/ui/calendar'
 import { 
   Users, 
@@ -36,6 +37,87 @@ import {
   FileText
 } from 'lucide-react'
 import { toast } from 'sonner'
+
+const Tooth = ({ number, state, onFaceClick, onToothClick }) => {
+  const getFaceColor = (face) => {
+    const faceState = state?.[face]
+    if (faceState === 'caries') return 'fill-red-500 hover:fill-red-600'
+    if (faceState === 'resina') return 'fill-blue-500 hover:fill-blue-600'
+    return 'fill-white hover:fill-gray-100'
+  }
+
+  const getToothStatusBorder = () => {
+    if (state?.status === 'corona') return 'border-yellow-400 border-2'
+    return 'border-gray-200'
+  }
+
+  return (
+    <div className="flex flex-col items-center p-1 bg-white rounded border border-gray-100 shadow-sm w-[46px]">
+      <span className="text-[10px] font-bold text-gray-500 mb-1">{number}</span>
+      
+      <div 
+        className={`relative w-9 h-9 flex items-center justify-center rounded cursor-pointer border ${getToothStatusBorder()}`}
+        onClick={onToothClick}
+        title={`Diente ${number}`}
+      >
+        {state?.status === 'ausente' ? (
+          <div className="absolute inset-0 flex items-center justify-center z-10 bg-white bg-opacity-70">
+            <span className="text-red-600 font-extrabold text-xl leading-none">X</span>
+          </div>
+        ) : null}
+
+        {state?.status === 'implante' ? (
+          <div className="absolute inset-0 flex items-center justify-center z-10 bg-white bg-opacity-70">
+            <span className="text-xs leading-none" title="Implante">🔩</span>
+          </div>
+        ) : null}
+
+        <svg viewBox="0 0 100 100" className="w-8 h-8">
+          <polygon
+            points="0,0 100,0 80,20 20,20"
+            className={`${getFaceColor('top')} stroke-gray-300 stroke-[1.5] transition-colors`}
+            onClick={(e) => { e.stopPropagation(); onFaceClick('top'); }}
+          />
+          <polygon
+            points="100,0 100,100 80,80 80,20"
+            className={`${getFaceColor('right')} stroke-gray-300 stroke-[1.5] transition-colors`}
+            onClick={(e) => { e.stopPropagation(); onFaceClick('right'); }}
+          />
+          <polygon
+            points="100,100 0,100 20,80 80,80"
+            className={`${getFaceColor('bottom')} stroke-gray-300 stroke-[1.5] transition-colors`}
+            onClick={(e) => { e.stopPropagation(); onFaceClick('bottom'); }}
+          />
+          <polygon
+            points="0,0 0,100 20,80 20,20"
+            className={`${getFaceColor('left')} stroke-gray-300 stroke-[1.5] transition-colors`}
+            onClick={(e) => { e.stopPropagation(); onFaceClick('left'); }}
+          />
+          <polygon
+            points="20,20 80,20 80,80 20,80"
+            className={`${getFaceColor('center')} stroke-gray-300 stroke-[1.5] transition-colors`}
+            onClick={(e) => { e.stopPropagation(); onFaceClick('center'); }}
+          />
+        </svg>
+      </div>
+    </div>
+  )
+}
+
+const translateSection = (sec) => {
+  const map = {
+    dashboard: 'Panel',
+    dentists: 'Dentistas',
+    patients: 'Pacientes',
+    treatments: 'Tratamientos',
+    appointments: 'Citas',
+    dentist: 'Dentista',
+    patient: 'Paciente',
+    treatment: 'Tratamiento',
+    appointment: 'Cita'
+  }
+  return map[sec] || sec
+}
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
@@ -60,6 +142,41 @@ export default function App() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [formData, setFormData] = useState({})
   const [searchTerm, setSearchTerm] = useState('')
+  const [isMobile, setIsMobile] = useState(false)
+
+  // Clinical Records states
+  const [selectedPatient, setSelectedPatient] = useState(null)
+  const [clinicalRecords, setClinicalRecords] = useState([])
+  const [historyOpen, setHistoryOpen] = useState(false)
+  const [newRecordData, setNewRecordData] = useState({ diagnosis: '', treatmentNotes: '', teethNotes: '' })
+  const [addingRecord, setAddingRecord] = useState(false)
+
+  // Odontograma states
+  const [selectedTool, setSelectedTool] = useState('caries')
+  const [patientOdontoState, setPatientOdontoState] = useState({})
+  const [isSavingOdonto, setIsSavingOdonto] = useState(false)
+
+  // Auto-sync odontograma when selectedPatient changes
+  useEffect(() => {
+    if (selectedPatient) {
+      const odonto = selectedPatient.odontograma
+      if (odonto) {
+        setPatientOdontoState(typeof odonto === 'string' ? JSON.parse(odonto) : odonto)
+      } else {
+        setPatientOdontoState({})
+      }
+    }
+  }, [selectedPatient])
+
+  // Detect mobile device
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768)
+    }
+    checkMobile()
+    window.addEventListener('resize', checkMobile)
+    return () => window.removeEventListener('resize', checkMobile)
+  }, [])
 
   // Check authentication on load
   useEffect(() => {
@@ -101,14 +218,19 @@ export default function App() {
       const data = await response.json()
       
       if (data.success) {
-        setCurrentUser(data.user)
-        setIsAuthenticated(true)
-        toast.success(isLogin ? 'Logged in successfully!' : 'Account created successfully!')
+        if (data.needsConfirmation) {
+          toast.info('¡Registro exitoso! Por favor revisa tu correo electrónico para confirmar tu cuenta.')
+          setIsLogin(true)
+        } else {
+          setCurrentUser(data.user)
+          setIsAuthenticated(true)
+          toast.success(isLogin ? '¡Inicio de sesión exitoso!' : '¡Cuenta creada correctamente!')
+        }
       } else {
-        toast.error(data.error || 'Authentication failed')
+        toast.error(data.error || 'Credenciales o autenticación incorrectas')
       }
     } catch (error) {
-      toast.error('Authentication error')
+      toast.error('Error de autenticación')
     } finally {
       setLoading(false)
     }
@@ -120,9 +242,151 @@ export default function App() {
       setIsAuthenticated(false)
       setCurrentUser(null)
       setCurrentSection('dashboard')
-      toast.success('Logged out successfully')
+      toast.success('Sesión cerrada correctamente')
     } catch (error) {
-      toast.error('Logout failed')
+      toast.error('Error al cerrar sesión')
+    }
+  }
+
+  const loadClinicalRecords = async (patientId) => {
+    try {
+      const res = await fetch(`/api/clinical-records?patientId=${patientId}`)
+      const data = await res.json()
+      setClinicalRecords(data)
+    } catch (error) {
+      toast.error('Error al cargar historial clínico')
+    }
+  }
+
+  const handleCreateRecord = async (e) => {
+    e.preventDefault()
+    if (!newRecordData.diagnosis || !newRecordData.treatmentNotes) {
+      toast.error('Por favor complete los campos obligatorios')
+      return
+    }
+
+    try {
+      const response = await fetch('/api/clinical-records', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          patientId: selectedPatient.id,
+          dentistId: currentUser?.role === 'dentist' ? currentUser.dentistId : (dentists[0]?.id || null),
+          date: new Date().toISOString().split('T')[0],
+          diagnosis: newRecordData.diagnosis,
+          treatmentNotes: newRecordData.treatmentNotes,
+          teethNotes: newRecordData.teethNotes
+        })
+      })
+
+      if (response.ok) {
+        loadClinicalRecords(selectedPatient.id)
+        setNewRecordData({ diagnosis: '', treatmentNotes: '', teethNotes: '' })
+        setAddingRecord(false)
+        toast.success('Ficha médica agregada correctamente')
+      } else {
+        toast.error('Error al crear registro clínico')
+      }
+    } catch (error) {
+      toast.error('Error de red')
+    }
+  }
+
+  const handleDeleteRecord = async (recordId) => {
+    if (!confirm('¿Está seguro de eliminar este registro clínico?')) return
+
+    try {
+      const response = await fetch(`/api/clinical-records/${recordId}`, {
+        method: 'DELETE'
+      })
+
+      if (response.ok) {
+        loadClinicalRecords(selectedPatient.id)
+        toast.success('Registro eliminado')
+      } else {
+        toast.error('Error al eliminar')
+      }
+    } catch (error) {
+      toast.error('Error de red')
+    }
+  }
+
+  const handleFaceClick = (toothNum, face) => {
+    setPatientOdontoState(prev => {
+      const toothState = prev[toothNum] || {}
+      
+      if (selectedTool === 'limpiar') {
+        const { [face]: _, ...rest } = toothState
+        return {
+          ...prev,
+          [toothNum]: rest
+        }
+      }
+      
+      if (selectedTool === 'caries' || selectedTool === 'resina') {
+        return {
+          ...prev,
+          [toothNum]: {
+            ...toothState,
+            [face]: selectedTool
+          }
+        }
+      }
+      
+      return prev
+    })
+  }
+
+  const handleToothClick = (toothNum) => {
+    setPatientOdontoState(prev => {
+      const toothState = prev[toothNum] || {}
+      
+      if (selectedTool === 'limpiar') {
+        return {
+          ...prev,
+          [toothNum]: {}
+        }
+      }
+      
+      if (['corona', 'implante', 'ausente'].includes(selectedTool)) {
+        return {
+          ...prev,
+          [toothNum]: {
+            ...toothState,
+            status: toothState.status === selectedTool ? null : selectedTool
+          }
+        }
+      }
+      
+      return prev
+    })
+  }
+
+  const handleSaveOdontograma = async () => {
+    if (!selectedPatient) return
+
+    setIsSavingOdonto(true)
+    try {
+      const response = await fetch(`/api/patients/${selectedPatient.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          odontograma: patientOdontoState
+        })
+      })
+
+      if (response.ok) {
+        // Update our local patients list state so the dashboard/table has the new patient state
+        setPatients(prev => prev.map(p => p.id === selectedPatient.id ? { ...p, odontograma: patientOdontoState } : p))
+        setSelectedPatient(prev => ({ ...prev, odontograma: patientOdontoState }))
+        toast.success('Odontograma guardado correctamente')
+      } else {
+        toast.error('Error al guardar el odontograma')
+      }
+    } catch (error) {
+      toast.error('Error de red al guardar')
+    } finally {
+      setIsSavingOdonto(false)
     }
   }
 
@@ -135,24 +399,42 @@ export default function App() {
         fetch('/api/appointments')
       ])
       
-      setDentists(await dentistsRes.json())
-      setPatients(await patientsRes.json())
-      setTreatments(await treatmentsRes.json())
-      setAppointments(await appointmentsRes.json())
+      const dentistsData = await dentistsRes.json()
+      const patientsData = await patientsRes.json()
+      const treatmentsData = await treatmentsRes.json()
+      const appointmentsData = await appointmentsRes.json()
+
+      setDentists(dentistsData)
+      setPatients(patientsData)
+      setTreatments(treatmentsData)
+      setAppointments(appointmentsData)
+      
       setCalendarEvents(
-      appointments.map((a) => ({
-        id: a.id,
-        title: `${a.treatments?.name} - ${a.patients?.fullName}`,
-        start: `${a.appointmentDate}T${a.appointmentTime}`,
-        backgroundColor: "#3B82F6",
-        borderColor: "#2563EB",
-      }))
+        appointmentsData.map((a) => ({
+          id: a.id,
+          title: `${a.treatments?.name || 'Treatment'} - ${a.patients?.fullName || 'Patient'}`,
+          start: `${a.appointmentDate}T${a.appointmentTime}`,
+          backgroundColor: "#3B82F6",
+          borderColor: "#2563EB",
+        }))
       )
 
     } catch (error) {
-      toast.error('Failed to load data')
+      console.error('Failed to load data:', error)
+      // toast.error('Failed to load data')
     }
   }
+
+  // Auto-refresh data every 30 seconds to catch WhatsApp appointments
+  useEffect(() => {
+    let interval;
+    if (isAuthenticated) {
+      interval = setInterval(() => {
+        loadAllData();
+      }, 30000);
+    }
+    return () => clearInterval(interval);
+  }, [isAuthenticated]);
 
   const handleCreate = async (section, data) => {
     try {
@@ -166,10 +448,10 @@ export default function App() {
         loadAllData()
         setDialogOpen(false)
         setFormData({})
-        toast.success(`${section.slice(0, -1)} created successfully!`)
+        toast.success(`¡${translateSection(section.slice(0, -1))} creado correctamente!`)
       }
     } catch (error) {
-      toast.error('Failed to create item')
+      toast.error('Error al crear el elemento')
     }
   }
 
@@ -186,15 +468,15 @@ export default function App() {
         setDialogOpen(false)
         setSelectedItem(null)
         setFormData({})
-        toast.success(`${section.slice(0, -1)} updated successfully!`)
+        toast.success(`¡${translateSection(section.slice(0, -1))} actualizado correctamente!`)
       }
     } catch (error) {
-      toast.error('Failed to update item')
+      toast.error('Error al actualizar el elemento')
     }
   }
 
   const handleDelete = async (section, id) => {
-    if (!confirm('Are you sure you want to delete this item?')) return
+    if (!confirm('¿Estás seguro de que deseas eliminar este elemento?')) return
     
     try {
       const response = await fetch(`/api/${section}/${id}`, {
@@ -203,10 +485,10 @@ export default function App() {
       
       if (response.ok) {
         loadAllData()
-        toast.success(`${section.slice(0, -1)} deleted successfully!`)
+        toast.success(`¡${translateSection(section.slice(0, -1))} eliminado correctamente!`)
       }
     } catch (error) {
-      toast.error('Failed to delete item')
+      toast.error('Error al eliminar el elemento')
     }
   }
 
@@ -220,21 +502,21 @@ export default function App() {
               <Stethoscope className="h-8 w-8 text-blue-600" />
             </div>
             <CardTitle className="text-2xl font-bold text-gray-900">
-              {isLogin ? 'Welcome Back' : 'Create Account'}
+              {isLogin ? 'Bienvenido de Nuevo' : 'Crear Cuenta'}
             </CardTitle>
             <CardDescription>
-              {isLogin ? 'Sign in to your dental clinic dashboard' : 'Join our dental clinic management system'}
+              {isLogin ? 'Inicia sesión en el panel de control de tu clínica dental' : 'Regístrate en el sistema de gestión de clínica dental'}
             </CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleAuth} className="space-y-4">
               {!isLogin && (
                 <div className="space-y-2">
-                  <Label htmlFor="name">Full Name</Label>
+                  <Label htmlFor="name">Nombre Completo</Label>
                   <Input
                     id="name"
                     type="text"
-                    placeholder="Enter your full name"
+                    placeholder="Ingresa tu nombre completo"
                     value={authForm.name}
                     onChange={(e) => setAuthForm({ ...authForm, name: e.target.value })}
                     required={!isLogin}
@@ -242,22 +524,22 @@ export default function App() {
                 </div>
               )}
               <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
+                <Label htmlFor="email">Correo Electrónico</Label>
                 <Input
                   id="email"
                   type="email"
-                  placeholder="Enter your email"
+                  placeholder="Ingresa tu correo electrónico"
                   value={authForm.email}
                   onChange={(e) => setAuthForm({ ...authForm, email: e.target.value })}
                   required
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
+                <Label htmlFor="password">Contraseña</Label>
                 <Input
                   id="password"
                   type="password"
-                  placeholder="Enter your password"
+                  placeholder="Ingresa tu contraseña"
                   value={authForm.password}
                   onChange={(e) => setAuthForm({ ...authForm, password: e.target.value })}
                   required
@@ -265,7 +547,7 @@ export default function App() {
               </div>
               
               <Button type="submit" className="w-full" disabled={loading}>
-                {loading ? 'Processing...' : (isLogin ? 'Sign In' : 'Create Account')}
+                {loading ? 'Procesando...' : (isLogin ? 'Iniciar Sesión' : 'Registrarse')}
               </Button>
               
               <div className="text-center">
@@ -274,15 +556,15 @@ export default function App() {
                   className="text-sm text-blue-600 hover:underline"
                   onClick={() => setIsLogin(!isLogin)}
                 >
-                  {isLogin ? "Don't have an account? Sign up" : 'Already have an account? Sign in'}
+                  {isLogin ? "¿No tienes una cuenta? Regístrate" : '¿Ya tienes una cuenta? Inicia sesión'}
                 </button>
               </div>
               
               {isLogin && (
                 <div className="text-center mt-4 p-3 bg-blue-50 rounded-lg">
-                  <p className="text-sm text-blue-800 font-medium">Demo Credentials:</p>
+                  <p className="text-sm text-blue-800 font-medium">Credenciales de Demostración:</p>
                   <p className="text-xs text-blue-600">Email: admin@clinic.com</p>
-                  <p className="text-xs text-blue-600">Password: admin123</p>
+                  <p className="text-xs text-blue-600">Contraseña: admin123</p>
                 </div>
               )}
             </form>
@@ -293,22 +575,83 @@ export default function App() {
   }
 
   const sidebarItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: Stethoscope },
-    { id: 'dentists', label: 'Dentists', icon: UserCheck },
-    { id: 'patients', label: 'Patients', icon: Users },
-    { id: 'treatments', label: 'Treatments', icon: FileText },
-    { id: 'appointments', label: 'Appointments', icon: CalendarIcon }
+    { id: 'dashboard', label: 'Inicio', icon: Stethoscope },
+    { id: 'dentists', label: 'Dentistas', icon: UserCheck },
+    { id: 'patients', label: 'Pacientes', icon: Users },
+    { id: 'treatments', label: 'Tratamientos', icon: FileText },
+    { id: 'appointments', label: 'Citas', icon: CalendarIcon }
   ]
+
+  const filteredSidebarItems = sidebarItems.filter(item => {
+    if (currentUser?.role === 'receptionist' || currentUser?.role === 'dentist') {
+      return item.id !== 'dentists' && item.id !== 'treatments'
+    }
+    return true
+  })
 
   // Dashboard component
  const DashboardContent = () => (
   <div className="space-y-6">
     <div className="flex items-center justify-between">
-      <h1 className="text-3xl font-bold text-gray-900">Dashboard Overview</h1>
+      <h1 className="text-3xl font-bold text-gray-900">Vista General del Dashboard</h1>
     </div>
     
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-      {/* ... tus 4 cards de resumen (Total Dentists, Total Patients, etc.) ... */}
+      {/* Total Dentists */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+          <CardTitle className="text-sm font-medium text-gray-500">Dentistas</CardTitle>
+          <div className="p-2 bg-blue-50 text-blue-600 rounded-lg">
+            <UserCheck className="h-4 w-4" />
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="text-2xl font-bold text-gray-900">{dentists.length}</div>
+          <p className="text-xs text-gray-500 mt-1">Activos en la clínica</p>
+        </CardContent>
+      </Card>
+
+      {/* Total Patients */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+          <CardTitle className="text-sm font-medium text-gray-500">Pacientes</CardTitle>
+          <div className="p-2 bg-green-50 text-green-600 rounded-lg">
+            <Users className="h-4 w-4" />
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="text-2xl font-bold text-gray-900">{patients.length}</div>
+          <p className="text-xs text-gray-500 mt-1">Registrados en el sistema</p>
+        </CardContent>
+      </Card>
+
+      {/* Total Treatments */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+          <CardTitle className="text-sm font-medium text-gray-500">Tratamientos</CardTitle>
+          <div className="p-2 bg-purple-50 text-purple-600 rounded-lg">
+            <FileText className="h-4 w-4" />
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="text-2xl font-bold text-gray-900">{treatments.length}</div>
+          <p className="text-xs text-gray-500 mt-1">Servicios en catálogo</p>
+        </CardContent>
+      </Card>
+
+      {/* Total Appointments */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+          <CardTitle className="text-sm font-medium text-gray-500">Citas Totales</CardTitle>
+          <div className="p-2 bg-amber-50 text-amber-600 rounded-lg">
+            <CalendarIcon className="h-4 w-4" />
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="text-2xl font-bold text-gray-900">{appointments.length}</div>
+          <p className="text-xs text-gray-500 mt-1">Agendadas e integradas</p>
+        </CardContent>
+      </Card>
     </div>
 
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -317,7 +660,7 @@ export default function App() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <CalendarIcon className="h-5 w-5" />
-            Recent Appointments
+            Citas Recientes
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -343,7 +686,7 @@ export default function App() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <UserCheck className="h-5 w-5" />
-            Available Dentists
+            Dentistas Disponibles
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -369,24 +712,41 @@ export default function App() {
     {/* <-- Aquí agregamos el calendario --> */}
     <div className="mt-6">
       <Card>
-        <CardHeader>
-          <CardTitle>
-            <CalendarIcon className="h-5 w-5 mr-2 inline-block" />
-            Appointments Calendar
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardTitle className="text-xl font-bold">
+            <CalendarIcon className="h-5 w-5 mr-2 inline-block text-blue-600" />
+            Calendario de Citas
           </CardTitle>
+          <Button variant="outline" size="sm" onClick={loadAllData}>
+            Actualizar
+          </Button>
         </CardHeader>
-        <CardContent>
-          <FullCalendar
-            plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
-            initialView="dayGridMonth"
-            events={calendarEvents}  // <-- tus eventos de citas
-            headerToolbar={{
-              left: 'prev,next today',
-              center: 'title',
-              right: 'dayGridMonth,timeGridWeek,timeGridDay',
-            }}
-            height="auto"
-          />
+        <CardContent className="pt-4">
+          <div className="calendar-container overflow-x-auto">
+            <FullCalendar
+              plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
+              initialView={isMobile ? "timeGridDay" : "dayGridMonth"}
+              events={calendarEvents}
+              locale="es"
+              headerToolbar={{
+                left: isMobile ? 'prev,next' : 'prev,next today',
+                center: 'title',
+                right: isMobile ? 'timeGridDay,listWeek' : 'dayGridMonth,timeGridWeek,timeGridDay',
+              }}
+              height="auto"
+              handleWindowResize={true}
+              stickyHeaderDates={true}
+              eventClick={(info) => {
+                const appt = appointments.find(a => a.id === info.event.id);
+                if (appt) {
+                  setSelectedItem(appt);
+                  setFormData(appt);
+                  setCurrentSection('appointments');
+                  setDialogOpen(true);
+                }
+              }}
+            />
+          </div>
         </CardContent>
       </Card>
     </div>
@@ -403,44 +763,44 @@ export default function App() {
           item.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
           item.specialty.toLowerCase().includes(searchTerm.toLowerCase())
         )
-        columns = ['Full Name', 'Specialty', 'Email', 'Phone', 'Actions']
+        columns = ['Nombre Completo', 'Especialidad', 'Email', 'Teléfono', 'Acciones']
         createForm = (
           <div className="space-y-4">
             <div>
-              <Label htmlFor="fullName">Full Name</Label>
+              <Label htmlFor="fullName">Nombre Completo</Label>
               <Input
                 id="fullName"
                 value={formData.fullName || ''}
                 onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
-                placeholder="Dr. John Smith"
+                placeholder="Dr. Juan Pérez"
               />
             </div>
             <div>
-              <Label htmlFor="specialty">Specialty</Label>
+              <Label htmlFor="specialty">Especialidad</Label>
               <Input
                 id="specialty"
                 value={formData.specialty || ''}
                 onChange={(e) => setFormData({ ...formData, specialty: e.target.value })}
-                placeholder="General Dentist"
+                placeholder="Odontólogo General"
               />
             </div>
             <div>
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email">Correo Electrónico</Label>
               <Input
                 id="email"
                 type="email"
                 value={formData.email || ''}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                placeholder="doctor@clinic.com"
+                placeholder="doctor@clinica.com"
               />
             </div>
             <div>
-              <Label htmlFor="phone">Phone</Label>
+              <Label htmlFor="phone">Teléfono</Label>
               <Input
                 id="phone"
                 value={formData.phone || ''}
                 onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                placeholder="+1-555-0123"
+                placeholder="+56912345678"
               />
             </div>
           </div>
@@ -451,35 +811,35 @@ export default function App() {
         data = patients.filter(item => 
           item.fullName.toLowerCase().includes(searchTerm.toLowerCase())
         )
-        columns = ['Full Name', 'Email', 'Phone', 'Actions']
+        columns = ['Nombre Completo', 'Email', 'Teléfono', 'Acciones']
         createForm = (
           <div className="space-y-4">
             <div>
-              <Label htmlFor="fullName">Full Name</Label>
+              <Label htmlFor="fullName">Nombre Completo</Label>
               <Input
                 id="fullName"
                 value={formData.fullName || ''}
                 onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
-                placeholder="John Smith"
+                placeholder="Juan Pérez"
               />
             </div>
             <div>
-              <Label htmlFor="email">Email (Optional)</Label>
+              <Label htmlFor="email">Correo Electrónico (Opcional)</Label>
               <Input
                 id="email"
                 type="email"
                 value={formData.email || ''}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                placeholder="patient@email.com"
+                placeholder="paciente@email.com"
               />
             </div>
             <div>
-              <Label htmlFor="phone">Phone</Label>
+              <Label htmlFor="phone">Teléfono</Label>
               <Input
                 id="phone"
                 value={formData.phone || ''}
                 onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                placeholder="+1-555-1234"
+                placeholder="+56912345678"
               />
             </div>
           </div>
@@ -490,20 +850,20 @@ export default function App() {
         data = treatments.filter(item => 
           item.name.toLowerCase().includes(searchTerm.toLowerCase())
         )
-        columns = ['Name', 'Cost', 'Duration', 'Description', 'Actions']
+        columns = ['Nombre', 'Costo', 'Duración', 'Descripción', 'Acciones']
         createForm = (
           <div className="space-y-4">
             <div>
-              <Label htmlFor="name">Treatment Name</Label>
+              <Label htmlFor="name">Nombre del Tratamiento</Label>
               <Input
                 id="name"
                 value={formData.name || ''}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                placeholder="Dental Cleaning"
+                placeholder="Limpieza Dental"
               />
             </div>
             <div>
-              <Label htmlFor="cost">Cost ($)</Label>
+              <Label htmlFor="cost">Costo ($)</Label>
               <Input
                 id="cost"
                 type="number"
@@ -514,21 +874,21 @@ export default function App() {
               />
             </div>
             <div>
-              <Label htmlFor="duration">Duration</Label>
+              <Label htmlFor="duration">Duración</Label>
               <Input
                 id="duration"
                 value={formData.duration || ''}
                 onChange={(e) => setFormData({ ...formData, duration: e.target.value })}
-                placeholder="60 minutes"
+                placeholder="60 minutos"
               />
             </div>
             <div>
-              <Label htmlFor="description">Description</Label>
+              <Label htmlFor="description">Descripción</Label>
               <Textarea
                 id="description"
                 value={formData.description || ''}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                placeholder="Brief description of the treatment"
+                placeholder="Breve descripción del tratamiento"
               />
             </div>
           </div>
@@ -540,14 +900,14 @@ export default function App() {
           item.patients?.fullName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
           item.dentists?.fullName?.toLowerCase().includes(searchTerm.toLowerCase())
         )
-        columns = ['Patient', 'Dentist', 'Treatment', 'Date', 'Time', 'Status', 'Actions']
+        columns = ['Paciente', 'Dentista', 'Tratamiento', 'Fecha', 'Hora', 'Estado', 'Acciones']
         createForm = (
           <div className="space-y-4">
             <div>
-              <Label htmlFor="patientId">Patient</Label>
+              <Label htmlFor="patientId">Paciente</Label>
               <Select onValueChange={(value) => setFormData({ ...formData, patientId: value })}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Select a patient" />
+                  <SelectValue placeholder="Seleccionar un paciente" />
                 </SelectTrigger>
                 <SelectContent>
                   {patients.map((patient) => (
@@ -559,10 +919,10 @@ export default function App() {
               </Select>
             </div>
             <div>
-              <Label htmlFor="dentistId">Dentist</Label>
+              <Label htmlFor="dentistId">Dentista</Label>
               <Select onValueChange={(value) => setFormData({ ...formData, dentistId: value })}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Select a dentist" />
+                  <SelectValue placeholder="Seleccionar un dentista" />
                 </SelectTrigger>
                 <SelectContent>
                   {dentists.map((dentist) => (
@@ -574,10 +934,10 @@ export default function App() {
               </Select>
             </div>
             <div>
-              <Label htmlFor="treatmentId">Treatment</Label>
+              <Label htmlFor="treatmentId">Tratamiento</Label>
               <Select onValueChange={(value) => setFormData({ ...formData, treatmentId: value })}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Select a treatment" />
+                  <SelectValue placeholder="Seleccionar un tratamiento" />
                 </SelectTrigger>
                 <SelectContent>
                   {treatments.map((treatment) => (
@@ -589,7 +949,7 @@ export default function App() {
               </Select>
             </div>
             <div>
-              <Label htmlFor="appointmentDate">Date</Label>
+              <Label htmlFor="appointmentDate">Fecha</Label>
               <Input
                 id="appointmentDate"
                 type="date"
@@ -598,7 +958,7 @@ export default function App() {
               />
             </div>
             <div>
-              <Label htmlFor="appointmentTime">Time</Label>
+              <Label htmlFor="appointmentTime">Hora</Label>
               <Input
                 id="appointmentTime"
                 type="time"
@@ -607,12 +967,12 @@ export default function App() {
               />
             </div>
             <div>
-              <Label htmlFor="notes">Notes</Label>
+              <Label htmlFor="notes">Notas</Label>
               <Textarea
                 id="notes"
                 value={formData.notes || ''}
                 onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                placeholder="Additional notes for the appointment"
+                placeholder="Notas adicionales para la cita"
               />
             </div>
           </div>
@@ -623,24 +983,24 @@ export default function App() {
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-bold text-gray-900 capitalize">{section}</h1>
+          <h1 className="text-3xl font-bold text-gray-900 capitalize">{translateSection(section)}</h1>
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
               <Button onClick={() => { setSelectedItem(null); setFormData({}) }}>
                 <Plus className="h-4 w-4 mr-2" />
-                Add {section.slice(0, -1)}
+                Agregar {translateSection(section.slice(0, -1))}
               </Button>
             </DialogTrigger>
             <DialogContent className="max-w-md">
               <DialogHeader>
                 <DialogTitle>
-                  {selectedItem ? 'Edit' : 'Add'} {section.slice(0, -1)}
+                  {selectedItem ? 'Editar' : 'Agregar'} {translateSection(section.slice(0, -1))}
                 </DialogTitle>
               </DialogHeader>
               {createForm}
               <DialogFooter>
                 <Button variant="outline" onClick={() => setDialogOpen(false)}>
-                  Cancel
+                  Cancelar
                 </Button>
                 <Button onClick={() => {
                   if (selectedItem) {
@@ -649,7 +1009,7 @@ export default function App() {
                     handleCreate(section, formData)
                   }
                 }}>
-                  {selectedItem ? 'Update' : 'Create'}
+                  {selectedItem ? 'Guardar' : 'Crear'}
                 </Button>
               </DialogFooter>
             </DialogContent>
@@ -662,7 +1022,7 @@ export default function App() {
               <div className="relative flex-1 max-w-sm">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                 <Input
-                  placeholder={`Search ${section}...`}
+                  placeholder={`Buscar ${translateSection(section).toLowerCase()}...`}
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-10"
@@ -708,7 +1068,7 @@ export default function App() {
                         <TableCell>
                           <div className="flex items-center gap-2">
                             <Mail className="h-4 w-4 text-gray-400" />
-                            {item.email || 'Not provided'}
+                            {item.email || 'No provisto'}
                           </div>
                         </TableCell>
                         <TableCell>
@@ -753,6 +1113,21 @@ export default function App() {
                     )}
                     <TableCell>
                       <div className="flex items-center gap-2">
+                        {section === 'patients' && currentUser?.role !== 'receptionist' && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setSelectedPatient(item)
+                              loadClinicalRecords(item.id)
+                              setHistoryOpen(true)
+                            }}
+                            className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 py-1 px-2 h-8"
+                          >
+                            <FileText className="h-4 w-4 mr-1" />
+                            Historial
+                          </Button>
+                        )}
                         <Button
                           variant="ghost"
                           size="sm"
@@ -764,13 +1139,16 @@ export default function App() {
                         >
                           <Edit className="h-4 w-4" />
                         </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDelete(section, item.id)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        {currentUser?.role !== 'receptionist' && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDelete(section, item.id)}
+                            className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>
@@ -804,13 +1182,13 @@ export default function App() {
             </div>
             <div>
               <h2 className="text-lg font-bold text-gray-900">SmileAdmin</h2>
-              <p className="text-sm text-gray-500">Dental Clinic</p>
+              <p className="text-sm text-gray-500">Clínica Dental</p>
             </div>
           </div>
         </div>
 
         <nav className="p-4 space-y-2">
-          {sidebarItems.map((item) => {
+          {filteredSidebarItems.map((item) => {
             const Icon = item.icon
             return (
               <button
@@ -841,7 +1219,7 @@ export default function App() {
             </Avatar>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-gray-900 truncate">
-                {currentUser?.name || 'Admin User'}
+                {currentUser?.name || 'Administrador'}
               </p>
               <p className="text-xs text-gray-500 truncate">{currentUser?.email}</p>
             </div>
@@ -872,12 +1250,12 @@ export default function App() {
               </Button>
               <div>
                 <h1 className="text-xl font-semibold text-gray-900 capitalize">
-                  {currentSection === 'dashboard' ? 'Dashboard' : currentSection}
+                  {currentSection === 'dashboard' ? 'Panel Principal' : translateSection(currentSection)}
                 </h1>
                 <p className="text-sm text-gray-500">
                   {currentSection === 'dashboard' 
-                    ? 'Welcome to your dental clinic management system'
-                    : `Manage your clinic's ${currentSection}`
+                    ? 'Bienvenido al sistema de gestión de tu clínica dental'
+                    : `Gestiona los ${translateSection(currentSection).toLowerCase()} de tu clínica`
                   }
                 </p>
               </div>
@@ -891,6 +1269,253 @@ export default function App() {
           {currentSection !== 'dashboard' && renderDataTable(currentSection)}
         </main>
       </div>
+
+      <Dialog open={historyOpen} onOpenChange={setHistoryOpen}>
+        <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Historial Clínico y Odontograma - {selectedPatient?.fullName}</DialogTitle>
+            <DialogDescription>
+              Fichas de diagnóstico, tratamientos dentales y visualización del odontograma
+            </DialogDescription>
+          </DialogHeader>
+
+          <Tabs defaultValue="history" className="w-full">
+            <TabsList className="grid w-full grid-cols-2 mb-6">
+              <TabsTrigger value="history">Ficha Clínica</TabsTrigger>
+              <TabsTrigger value="odontograma">Odontograma</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="history" className="space-y-4">
+              {/* Form to add a new record (Admins and Dentists only) */}
+              {currentUser?.role !== 'receptionist' && (
+                <div className="border-b pb-4 mb-4">
+                  {!addingRecord ? (
+                    <Button onClick={() => setAddingRecord(true)}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Nueva Ficha Clínica
+                    </Button>
+                  ) : (
+                    <form onSubmit={handleCreateRecord} className="space-y-4 bg-gray-50 p-4 rounded-lg">
+                      <h3 className="font-semibold text-gray-900">Agregar Nueva Ficha</h3>
+                      <div>
+                        <Label htmlFor="diagnosis">Diagnóstico *</Label>
+                        <Input
+                          id="diagnosis"
+                          value={newRecordData.diagnosis}
+                          onChange={(e) => setNewRecordData({ ...newRecordData, diagnosis: e.target.value })}
+                          placeholder="Ej. Caries profunda en pieza 46"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="treatmentNotes">Tratamiento Realizado *</Label>
+                        <Textarea
+                          id="treatmentNotes"
+                          value={newRecordData.treatmentNotes}
+                          onChange={(e) => setNewRecordData({ ...newRecordData, treatmentNotes: e.target.value })}
+                          placeholder="Ej. Se realiza endodoncia y reconstrucción..."
+                          required
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="teethNotes">Pieza Dental / Notas adicionales (Opcional)</Label>
+                        <Input
+                          id="teethNotes"
+                          value={newRecordData.teethNotes}
+                          onChange={(e) => setNewRecordData({ ...newRecordData, teethNotes: e.target.value })}
+                          placeholder="Ej. Pieza 46 (molar inferior derecho)"
+                        />
+                      </div>
+                      <div className="flex gap-2">
+                        <Button type="submit">Guardar Ficha</Button>
+                        <Button variant="outline" type="button" onClick={() => { setAddingRecord(false); setNewRecordData({ diagnosis: '', treatmentNotes: '', teethNotes: '' }); }}>
+                          Cancelar
+                        </Button>
+                      </div>
+                    </form>
+                  )}
+                </div>
+              )}
+
+              {/* List of past records */}
+              <div className="space-y-4 mt-4">
+                <h3 className="font-semibold text-gray-900">Fichas Clínicas Anteriores</h3>
+                {clinicalRecords.length === 0 ? (
+                  <p className="text-gray-500 text-sm">No hay registros clínicos para este paciente.</p>
+                ) : (
+                  clinicalRecords.map((record) => (
+                    <div key={record.id} className="border p-4 rounded-lg space-y-2 bg-white relative">
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs text-blue-600 font-semibold">{record.date}</span>
+                        <span className="text-xs text-gray-500">Dr. {record.dentists?.fullName || 'Desconocido'}</span>
+                      </div>
+                      <div className="text-sm">
+                        <span className="font-semibold text-gray-700">Diagnóstico:</span> {record.diagnosis}
+                      </div>
+                      <div className="text-sm">
+                        <span className="font-semibold text-gray-700">Tratamiento:</span> {record.treatmentNotes}
+                      </div>
+                      {record.teethNotes && (
+                        <div className="text-xs text-gray-500 italic">
+                          Nota dental: {record.teethNotes}
+                        </div>
+                      )}
+                      {currentUser?.role !== 'receptionist' && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDeleteRecord(record.id)}
+                          className="absolute top-2 right-2 text-red-500 hover:text-red-700"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+            </TabsContent>
+
+            <TabsContent value="odontograma" className="space-y-6">
+              {/* Tool Palette */}
+              <div>
+                <h3 className="text-sm font-semibold text-gray-900 mb-3">Paleta de Diagnóstico</h3>
+                <div className="flex flex-wrap items-center gap-2 bg-gray-50 p-3 rounded-lg border border-gray-200">
+                  {[
+                    { id: 'caries', name: 'Caries', color: 'bg-red-500' },
+                    { id: 'resina', name: 'Resina', color: 'bg-blue-500' },
+                    { id: 'corona', name: 'Corona', color: 'bg-yellow-400 border border-yellow-600' },
+                    { id: 'implante', name: 'Implante', color: 'bg-gray-500' },
+                    { id: 'ausente', name: 'Ausente', color: 'bg-red-700' },
+                    { id: 'limpiar', name: 'Limpiar / Borrar', color: 'bg-white border border-gray-300' }
+                  ].map(tool => {
+                    const isActive = selectedTool === tool.id
+                    return (
+                      <button
+                        key={tool.id}
+                        type="button"
+                        onClick={() => setSelectedTool(tool.id)}
+                        className={`flex items-center px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
+                          isActive 
+                            ? 'bg-blue-600 border-blue-600 text-white shadow-sm ring-2 ring-blue-100' 
+                            : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
+                        }`}
+                      >
+                        <span className={`w-3.5 h-3.5 rounded-full mr-2 flex items-center justify-center text-[10px] ${
+                          tool.id === 'implante' || tool.id === 'ausente' ? 'bg-transparent' : tool.color
+                        }`}>
+                          {tool.id === 'implante' && '🔩'}
+                          {tool.id === 'ausente' && <span className="text-red-600 font-bold">X</span>}
+                        </span>
+                        {tool.name}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Instructions */}
+              <div className="p-3 bg-blue-50 rounded-lg text-xs text-blue-800 border border-blue-100">
+                <span className="font-semibold">Instrucciones:</span> Selecciona una herramienta de diagnóstico arriba. 
+                <ul className="list-disc list-inside mt-1 space-y-1">
+                  <li>Para <strong>Caries</strong> o <strong>Resina</strong>: Haz clic en cualquiera de las 5 superficies individuales de un diente (arriba, abajo, izquierda, derecha o centro).</li>
+                  <li>Para <strong>Corona</strong>, <strong>Implante</strong> o <strong>Ausente</strong>: Haz clic en el recuadro del diente completo (zona del número/borde).</li>
+                  <li>Para <strong>Limpiar / Borrar</strong>: Selecciona la herramienta y haz clic en la superficie o diente que deseas restaurar a su estado original.</li>
+                </ul>
+              </div>
+
+              {/* Visual Odontograma Map */}
+              <div className="border border-gray-200 rounded-xl p-4 bg-white overflow-x-auto shadow-inner">
+                <div className="min-w-[820px] flex flex-col items-center py-4">
+                  
+                  {/* Upper Arch */}
+                  <div className="w-full mb-8">
+                    <h4 className="text-xs font-bold text-gray-400 text-center uppercase tracking-widest mb-4">Arcada Superior</h4>
+                    <div className="flex justify-center gap-1.5">
+                      {/* Quadrant 1 (18 to 11) */}
+                      <div className="flex gap-1.5 border-r-2 border-dashed border-gray-300 pr-3">
+                        {[18, 17, 16, 15, 14, 13, 12, 11].map(num => (
+                          <Tooth 
+                            key={num} 
+                            number={num} 
+                            state={patientOdontoState[num]} 
+                            onFaceClick={(face) => handleFaceClick(num, face)}
+                            onToothClick={() => handleToothClick(num)}
+                          />
+                        ))}
+                      </div>
+                      {/* Quadrant 2 (21 to 28) */}
+                      <div className="flex gap-1.5 pl-3">
+                        {[21, 22, 23, 24, 25, 26, 27, 28].map(num => (
+                          <Tooth 
+                            key={num} 
+                            number={num} 
+                            state={patientOdontoState[num]} 
+                            onFaceClick={(face) => handleFaceClick(num, face)}
+                            onToothClick={() => handleToothClick(num)}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Divider line */}
+                  <div className="w-full border-t border-gray-100 my-2" />
+
+                  {/* Lower Arch */}
+                  <div className="w-full mt-4">
+                    <h4 className="text-xs font-bold text-gray-400 text-center uppercase tracking-widest mb-4">Arcada Inferior</h4>
+                    <div className="flex justify-center gap-1.5">
+                      {/* Quadrant 4 (48 to 41) */}
+                      <div className="flex gap-1.5 border-r-2 border-dashed border-gray-300 pr-3">
+                        {[48, 47, 46, 45, 44, 43, 42, 41].map(num => (
+                          <Tooth 
+                            key={num} 
+                            number={num} 
+                            state={patientOdontoState[num]} 
+                            onFaceClick={(face) => handleFaceClick(num, face)}
+                            onToothClick={() => handleToothClick(num)}
+                          />
+                        ))}
+                      </div>
+                      {/* Quadrant 3 (31 to 38) */}
+                      <div className="flex gap-1.5 pl-3">
+                        {[31, 32, 33, 34, 35, 36, 37, 38].map(num => (
+                          <Tooth 
+                            key={num} 
+                            number={num} 
+                            state={patientOdontoState[num]} 
+                            onFaceClick={(face) => handleFaceClick(num, face)}
+                            onToothClick={() => handleToothClick(num)}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex justify-end pt-4 border-t gap-2">
+                <Button 
+                  onClick={handleSaveOdontograma} 
+                  disabled={isSavingOdonto}
+                  className="bg-blue-600 hover:bg-blue-700 text-white font-medium shadow-sm transition-all"
+                >
+                  {isSavingOdonto ? 'Guardando...' : 'Guardar Odontograma'}
+                </Button>
+              </div>
+            </TabsContent>
+          </Tabs>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setHistoryOpen(false); setAddingRecord(false); }}>
+              Cerrar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
